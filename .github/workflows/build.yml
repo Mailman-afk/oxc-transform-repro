@@ -1,0 +1,59 @@
+name: Reproduce oxc-transform corruption
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    # ubuntu-latest is a native x86_64 runner (no emulation), which is the
+    # environment class where this bug has been 100% reproducible for us.
+    # It has NOT reproduced on Apple Silicon (arm64, even via Rosetta 2 /
+    # QEMU x86_64 emulation) in any of our testing.
+    runs-on: ubuntu-latest
+    # Our real CI image is Alpine 3.23 (musl libc), not glibc-based Ubuntu.
+    # A previous version of this repro ran directly on ubuntu-latest
+    # (glibc) with all these same dependencies/chunk counts and did NOT
+    # reproduce, so we now run the build inside an Alpine 3.23 container
+    # to match our production CI image as closely as possible.
+    container:
+      image: alpine:3.23
+    env:
+      BUN_INSTALL: /root/.bun
+    strategy:
+      fail-fast: false
+      matrix:
+        # Run several attempts since the failure may be timing/concurrency
+        # dependent (see linked issue for details) rather than 100%
+        # deterministic on every piece of hardware.
+        attempt: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: Install container prerequisites
+        # git: needed by actions/checkout
+        # gcompat + libstdc++: let glibc-compiled Node (bundled in JS-based
+        #   actions like actions/checkout) run on this musl-based image
+        # bash + curl + unzip: needed by the bun install script
+        run: apk add --no-cache git gcompat libstdc++ bash curl unzip
+
+      - uses: actions/checkout@v4
+
+      - name: Install bun (same install method as our production CI image)
+        run: |
+          curl -fsSL https://bun.com/install | bash
+          echo "$BUN_INSTALL/bin" >> "$GITHUB_PATH"
+
+      - name: Print environment info
+        run: |
+          cat /etc/os-release
+          echo "arch=$(uname -m)"
+          nproc
+          cat /proc/cpuinfo | grep "model name" | head -1
+          bun --version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build (production)
+        run: bun run build
+
