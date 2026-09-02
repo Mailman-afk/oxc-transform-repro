@@ -1,6 +1,6 @@
 # oxc-transform corruption repro
 
-Minimal reproduction for [angular/angular-cli issue](<link to your issue here>).
+Minimal reproduction for [angular/angular-cli issue](https://github.com/angular/angular-cli/issues/33973).
 
 ## What this is
 
